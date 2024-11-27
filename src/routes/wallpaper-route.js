@@ -13,5 +13,8 @@ wallpaperRouter
     .route("/add-wallpaper")
     .post(multer_middleware_1.default.single("wallpaperImage"), wallpaper_controller_1.addWallpaperController);
 wallpaperRouter
+    .route("/add-wallpaper-bulk")
+    .post(multer_middleware_1.default.array("wallpapers"), wallpaper_controller_1.addBulkWallpapersController);
+wallpaperRouter
     .route("/get-wallpaper/:category")
     .get(wallpaper_controller_1.getWallpapersByCategoryController);

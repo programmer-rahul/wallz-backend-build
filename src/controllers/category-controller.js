@@ -8,46 +8,38 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAllCategoriesController = void 0;
-const ALLCategories = [
-    {
-        name: "Nature",
-        previewUrl: "https://res.cloudinary.com/dubmozsyq/image/upload/v1732549461/m1xuy1aolrc6b5bd5pzx.jpg",
-    },
-    {
-        name: "Architecture",
-        previewUrl: "https://res.cloudinary.com/dubmozsyq/image/upload/v1732550569/reukbmqapdzuc7fgnmzo.jpg",
-    },
-    {
-        name: "Abstract",
-        previewUrl: "https://res.cloudinary.com/dubmozsyq/image/upload/v1732549461/m1xuy1aolrc6b5bd5pzx.jpg",
-    },
-    {
-        name: "Space",
-        previewUrl: "https://res.cloudinary.com/dubmozsyq/image/upload/v1732550569/reukbmqapdzuc7fgnmzo.jpg",
-    },
-    {
-        name: "Technology",
-        previewUrl: "https://res.cloudinary.com/dubmozsyq/image/upload/v1732549461/m1xuy1aolrc6b5bd5pzx.jpg",
-    },
-    {
-        name: "Art",
-        previewUrl: "https://res.cloudinary.com/dubmozsyq/image/upload/v1732550569/reukbmqapdzuc7fgnmzo.jpg",
-    },
-    {
-        name: "Animals",
-        previewUrl: "https://res.cloudinary.com/dubmozsyq/image/upload/v1732549461/m1xuy1aolrc6b5bd5pzx.jpg",
-    },
-];
+const wallpaper_schema_1 = __importDefault(require("../models/wallpaper-schema"));
 const getAllCategoriesController = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // Return the results with pagination info
-        res.status(200).json({
-            allCategories: ALLCategories,
-        });
+        // Aggregate distinct categories along with a preview URL for each category
+        const categories = yield wallpaper_schema_1.default.aggregate([
+            {
+                $group: {
+                    _id: "$category", // Group by category
+                    previewUrl: { $first: "$url" }, // Pick the first image URL as preview
+                },
+            },
+            {
+                $project: {
+                    _id: 0,
+                    name: "$_id",
+                    previewUrl: 1,
+                },
+            },
+        ]);
+        if (!categories.length) {
+            res.status(404).json({ error: "No categories found" });
+            return;
+        }
+        res.status(200).json({ allCategories: categories });
     }
     catch (error) {
+        console.error("Error fetching categories:", error);
         res.status(500).json({ error: "Error fetching categories" });
     }
 });

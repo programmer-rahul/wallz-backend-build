@@ -9,6 +9,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const cors_1 = __importDefault(require("cors"));
 const wallpaper_route_1 = require("./src/routes/wallpaper-route");
 const category_route_1 = require("./src/routes/category-route");
+const cloudinary_1 = require("./src/config/cloudinary");
 dotenv_1.default.config({
     path: ".env",
 });
@@ -23,9 +24,12 @@ app.use(express_1.default.json());
 app.use("/wallpaper", wallpaper_route_1.wallpaperRouter);
 app.use("/category", category_route_1.categoryRouter);
 (0, db_connection_1.default)()
-    .then(() => app.listen(PORT, () => {
-    "Server is running!";
-}))
+    .then(() => {
+    (0, cloudinary_1.connectCloudinary)();
+    app.listen(PORT, () => {
+        "Server is running!";
+    });
+})
     .catch((err) => {
     console.log("Database connection error :- ", err);
 });
