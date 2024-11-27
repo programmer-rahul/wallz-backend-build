@@ -1,0 +1,1 @@
+{"root":["../index.ts","../seedWallpapers.ts","../src/config/cloudinary.ts","../src/config/db-connection.ts","../src/controllers/category-controller.ts","../src/controllers/wallpaper-controller.ts","../src/middlewares/multer-middleware.ts","../src/models/wallpaper-schema.ts","../src/routes/category-route.ts","../src/routes/wallpaper-route.ts"],"version":"5.7.2"}
