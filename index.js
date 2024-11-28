@@ -10,6 +10,7 @@ const cors_1 = __importDefault(require("cors"));
 const wallpaper_route_1 = require("./src/routes/wallpaper-route");
 const category_route_1 = require("./src/routes/category-route");
 const cloudinary_1 = require("./src/config/cloudinary");
+const redis_1 = require("./src/config/redis");
 dotenv_1.default.config({
     path: ".env",
 });
@@ -26,6 +27,7 @@ app.use("/category", category_route_1.categoryRouter);
 (0, db_connection_1.default)()
     .then(() => {
     (0, cloudinary_1.connectCloudinary)();
+    (0, redis_1.connectRedis)();
     app.listen(PORT, () => {
         "Server is running!";
     });

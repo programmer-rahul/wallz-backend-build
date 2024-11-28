@@ -14,14 +14,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAllCategoriesController = void 0;
 const wallpaper_schema_1 = __importDefault(require("../models/wallpaper-schema"));
+const redis_1 = require("../config/redis");
 const getAllCategoriesController = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // Aggregate distinct categories along with a preview URL for each category
+        const cacheKey = "categories";
+        // Check Redis cache
+        const cachedData = yield redis_1.redisClient.get(cacheKey);
+        if (cachedData) {
+            res.status(200).json({ allCategories: JSON.parse(cachedData) });
+            return;
+        }
+        // Fetch categories from database
         const categories = yield wallpaper_schema_1.default.aggregate([
             {
                 $group: {
                     _id: "$category", // Group by category
-                    previewUrl: { $first: "$url" }, // Pick the first image URL as preview
+                    previewUrl: { $first: "$url" }, // Use the first image URL as preview
                 },
             },
             {
@@ -36,6 +44,8 @@ const getAllCategoriesController = (_req, res) => __awaiter(void 0, void 0, void
             res.status(404).json({ error: "No categories found" });
             return;
         }
+        // Cache categories in Redis for 1 hour
+        yield redis_1.redisClient.setEx(cacheKey, 3600, JSON.stringify(categories));
         res.status(200).json({ allCategories: categories });
     }
     catch (error) {

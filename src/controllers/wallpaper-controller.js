@@ -12,33 +12,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addBulkWallpapersController = exports.getWallpapersByCategoryController = exports.addWallpaperController = void 0;
+exports.getWallpapersByCategoryController = exports.addBulkWallpapersController = exports.addWallpaperController = void 0;
 const cloudinary_1 = require("../config/cloudinary");
 const wallpaper_schema_1 = __importDefault(require("../models/wallpaper-schema"));
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
+const redis_1 = require("../config/redis");
 const addWallpaperController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         console.log("add wallpaper request");
         const { category } = req.body;
         const wallpaperImage = req.file;
-        // console.log("category", category);
-        // console.log("wallpaperImage", wallpaperImage);
-        if (!category) {
-            return;
-        }
-        // Check if the file exists
-        console.log("image", wallpaperImage);
-        if (!wallpaperImage) {
-            res.status(400).json({ error: "Wallpaper image is required" });
+        if (!category || !wallpaperImage) {
+            res.status(400).json({ error: "Category and image are required" });
             return;
         }
         const imgUploaded = yield (0, cloudinary_1.uploadToCloudinary)(wallpaperImage.path);
-        console.log(imgUploaded);
         if (!imgUploaded) {
-            res
-                .status(400)
-                .json({ error: "Cloudinary image uploading error", imgUploaded });
+            res.status(400).json({ error: "Error uploading image to Cloudinary" });
             return;
         }
         const newWallpaper = new wallpaper_schema_1.default({
@@ -48,17 +37,17 @@ const addWallpaperController = (req, res) => __awaiter(void 0, void 0, void 0, f
             downloadCount: 0,
             viewCount: 0,
         });
-        if (!newWallpaper) {
-            res
-                .status(400)
-                .json({ error: "Error during creating new wallpaper model" });
-            return;
-        }
         yield newWallpaper.save();
+        // Invalidate relevant Redis caches
+        yield redis_1.redisClient.del("categories"); // Clear category cache
+        yield redis_1.redisClient.keys(`wallpapers:*`).then((keys) => {
+            if (keys.length)
+                redis_1.redisClient.del(keys); // Clear all wallpaper-related caches
+        });
         res.status(200).json({ message: "Wallpaper added successfully" });
     }
     catch (error) {
-        console.log("erro", error);
+        console.error("Error adding wallpaper:", error);
         res.status(500).json({ error: "Failed to add wallpaper" });
     }
 });
@@ -66,57 +55,51 @@ exports.addWallpaperController = addWallpaperController;
 const getWallpapersByCategoryController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
-        // Get category from request parameters
-        console.log("request");
         const { category } = req.params;
-        // Get page and limit from query parameters
-        let page = req.query.page; // Treat page as string
-        let limit = req.query.limit; // Treat limit as string
-        let favouriteIds = (_a = req.query) === null || _a === void 0 ? void 0 : _a.favouriteIds; // Treat limit as string
-        // Set defaults for pagination if not provided
-        page = page ? page : "1"; // Default to page 1 if undefined
-        limit = limit ? limit : "10"; // Default to 10 wallpapers per page if undefined
-        // Parse page and limit to integers
-        const pageNumber = parseInt(page, 10);
-        const limitNumber = parseInt(limit, 10);
-        // Ensure that the parsed values are valid numbers, otherwise fallback to defaults
-        const validPage = pageNumber > 0 ? pageNumber : 1;
-        const validLimit = limitNumber > 0 ? limitNumber : 10;
-        // Calculate how many wallpapers to skip
-        const skip = (validPage - 1) * validLimit;
-        // Find wallpapers by category with pagination
-        let wallpapers;
-        let totalCount;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const favouriteIds = (_a = req.query) === null || _a === void 0 ? void 0 : _a.favouriteIds;
+        const cacheKey = `wallpapers:${category}:${page}:${limit}`;
+        // Check Redis cache
+        const cachedData = yield redis_1.redisClient.get(cacheKey);
+        if (cachedData) {
+            res.status(200).json(JSON.parse(cachedData));
+            return;
+        }
+        // Calculate pagination
+        const skip = (page - 1) * limit;
+        let wallpapers, totalCount;
         if (category === "all-wallpapers") {
-            wallpapers = yield wallpaper_schema_1.default.find({}).skip(skip).limit(validLimit);
+            wallpapers = yield wallpaper_schema_1.default.find({}).skip(skip).limit(limit);
             totalCount = yield wallpaper_schema_1.default.countDocuments({});
         }
         else if (category === "favourite" && favouriteIds) {
             const ids = JSON.parse(favouriteIds);
             wallpapers = yield wallpaper_schema_1.default.find({ id: { $in: ids } })
                 .skip(skip)
-                .limit(validLimit);
+                .limit(limit);
             totalCount = yield wallpaper_schema_1.default.countDocuments({ id: { $in: ids } });
         }
         else {
             wallpapers = yield wallpaper_schema_1.default.find({ category })
                 .skip(skip)
-                .limit(validLimit);
+                .limit(limit);
             totalCount = yield wallpaper_schema_1.default.countDocuments({ category });
         }
-        // Get the total count of wallpapers in the category
-        // Calculate total pages
-        const totalPages = Math.ceil(totalCount / validLimit);
-        // Return the results with pagination info
-        res.status(200).json({
-            page: validPage,
-            limit: validLimit,
+        const totalPages = Math.ceil(totalCount / limit);
+        const result = {
+            page,
+            limit,
             totalPages,
             totalCount,
             wallpapers,
-        });
+        };
+        // Cache result in Redis for 30 minutes
+        yield redis_1.redisClient.setEx(cacheKey, 1800, JSON.stringify(result));
+        res.status(200).json(result);
     }
     catch (error) {
+        console.error("Error fetching wallpapers:", error);
         res.status(500).json({ error: "Error fetching wallpapers" });
     }
 });
@@ -125,22 +108,15 @@ const addBulkWallpapersController = (req, res) => __awaiter(void 0, void 0, void
     try {
         const { category } = req.body;
         const wallpaperImages = req.files;
-        if (!category) {
-            res.status(400).json({ error: "Category is required" });
-            return;
-        }
-        if (!wallpaperImages || wallpaperImages.length === 0) {
-            res
-                .status(400)
-                .json({ error: "At least one wallpaper image is required" });
+        if (!category || !(wallpaperImages === null || wallpaperImages === void 0 ? void 0 : wallpaperImages.length)) {
+            res.status(400).json({ error: "Category and images are required" });
             return;
         }
         const uploadedWallpapers = [];
         for (const wallpaper of wallpaperImages) {
             const imgUploaded = yield (0, cloudinary_1.uploadToCloudinary)(wallpaper.path);
-            if (!imgUploaded) {
-                continue; // Skip to the next file if upload fails
-            }
+            if (!imgUploaded)
+                continue;
             const newWallpaper = new wallpaper_schema_1.default({
                 id: imgUploaded.public_id,
                 category,
@@ -151,21 +127,11 @@ const addBulkWallpapersController = (req, res) => __awaiter(void 0, void 0, void
             yield newWallpaper.save();
             uploadedWallpapers.push(newWallpaper);
         }
-        // Cleanup: Delete all files in the 'public' folder after successful uploads
-        const publicFolderPath = path_1.default.join(__dirname, "../../public");
-        fs_1.default.readdir(publicFolderPath, (err, files) => {
-            if (err) {
-                console.error("Error reading public folder:", err);
-                return;
-            }
-            for (const file of files) {
-                const filePath = path_1.default.join(publicFolderPath, file);
-                fs_1.default.unlink(filePath, (unlinkErr) => {
-                    if (unlinkErr) {
-                        console.error("Error deleting file:", unlinkErr);
-                    }
-                });
-            }
+        // Invalidate caches
+        yield redis_1.redisClient.del("categories");
+        yield redis_1.redisClient.keys(`wallpapers:*`).then((keys) => {
+            if (keys.length)
+                redis_1.redisClient.del(keys);
         });
         res.status(200).json({
             message: "Wallpapers uploaded successfully",
