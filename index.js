@@ -14,6 +14,7 @@ const redis_1 = require("./src/config/redis");
 dotenv_1.default.config({
     path: ".env",
 });
+console.log("yes", process.env.REDIS_URL);
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 app.use((0, cors_1.default)({
