@@ -38,7 +38,7 @@ const addWallpaperController = (req, res) => __awaiter(void 0, void 0, void 0, f
             viewCount: 0,
         });
         yield newWallpaper.save();
-        // Invalidate relevant Redis caches
+        // Invalidate relevant redisClient caches
         yield redis_1.redisClient.del("categories"); // Clear category cache
         yield redis_1.redisClient.keys(`wallpapers:*`).then((keys) => {
             if (keys.length)
@@ -55,12 +55,13 @@ exports.addWallpaperController = addWallpaperController;
 const getWallpapersByCategoryController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
+        console.log("get wallpapers request");
         const { category } = req.params;
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const favouriteIds = (_a = req.query) === null || _a === void 0 ? void 0 : _a.favouriteIds;
         const cacheKey = `wallpapers:${category}:${page}:${limit}`;
-        // Check Redis cache
+        // Check redisClient cache
         const cachedData = yield redis_1.redisClient.get(cacheKey);
         if (cachedData) {
             res.status(200).json(JSON.parse(cachedData));
@@ -70,8 +71,10 @@ const getWallpapersByCategoryController = (req, res) => __awaiter(void 0, void 0
         const skip = (page - 1) * limit;
         let wallpapers, totalCount;
         if (category === "all-wallpapers") {
-            wallpapers = yield wallpaper_schema_1.default.find({}).skip(skip).limit(limit);
-            totalCount = yield wallpaper_schema_1.default.countDocuments({});
+            wallpapers = yield wallpaper_schema_1.default.aggregate([
+                { $sample: { size: limit } }, // Randomly sample `limit` documents
+            ]);
+            totalCount = yield wallpaper_schema_1.default.countDocuments({}); // Total documents
         }
         else if (category === "favourite" && favouriteIds) {
             const ids = JSON.parse(favouriteIds);
@@ -94,8 +97,8 @@ const getWallpapersByCategoryController = (req, res) => __awaiter(void 0, void 0
             totalCount,
             wallpapers,
         };
-        // Cache result in Redis for 30 minutes
-        yield redis_1.redisClient.setEx(cacheKey, 1800, JSON.stringify(result));
+        // Cache result in redisClient for 30 minutes
+        yield redis_1.redisClient.setex(cacheKey, 1800, JSON.stringify(result));
         res.status(200).json(result);
     }
     catch (error) {

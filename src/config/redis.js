@@ -8,29 +8,31 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.connectRedis = exports.redisClient = void 0;
-const redis_1 = require("redis");
-const redisClient = (0, redis_1.createClient)();
-exports.redisClient = redisClient;
-redisClient.on("error", (err) => console.error("Redis Client Error", err));
+const ioredis_1 = __importDefault(require("ioredis"));
+let redisClient;
 const connectRedis = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        yield redisClient.connect();
+        exports.redisClient = redisClient = new ioredis_1.default(process.env.REDIS_URL || "redis://localhost:6379");
         console.log("Redis connected successfully");
+        // redis connection events
+        redisClient.on("ready", () => {
+            console.log("Redis client is ready");
+        });
+        redisClient.on("error", (err) => {
+            console.error("Redis client error:", err);
+        });
+        redisClient.on("end", () => {
+            console.log("Redis connection closed");
+        });
+        redisClient.on("error", (err) => console.error("Redis Client Error", err));
     }
     catch (error) {
         console.error("Error connecting to Redis:", error);
     }
 });
 exports.connectRedis = connectRedis;
-// redis connection events
-redisClient.on("ready", () => {
-    console.log("Redis client is ready");
-});
-redisClient.on("error", (err) => {
-    console.error("Redis client error:", err);
-});
-redisClient.on("end", () => {
-    console.log("Redis connection closed");
-});

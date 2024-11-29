@@ -45,7 +45,7 @@ const getAllCategoriesController = (_req, res) => __awaiter(void 0, void 0, void
             return;
         }
         // Cache categories in Redis for 1 hour
-        yield redis_1.redisClient.setEx(cacheKey, 3600, JSON.stringify(categories));
+        yield redis_1.redisClient.setex(cacheKey, 3600, JSON.stringify(categories));
         res.status(200).json({ allCategories: categories });
     }
     catch (error) {
