@@ -4,8 +4,8 @@
   "main": "dist/index.js",
   "license": "MIT",
   "scripts": {
-    "dev": "nodemon ./index.ts",
-    "start": "node dist/index.js",
+    "dev": "nodemon ./index.js",
+    "start": "node ./index.js",
     "build": "tsc"
   },
   "dependencies": {
